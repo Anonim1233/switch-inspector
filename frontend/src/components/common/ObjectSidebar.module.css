@@ -1,0 +1,100 @@
+.content { display: flex; flex: 1; min-height: 0; position: relative; }
+
+.sidebar {
+  width: 210px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background: var(--card-bg);
+  border-right: 1px solid var(--border);
+  transition: background .2s;
+}
+
+.search { padding: 9px; border-bottom: 1px solid var(--border); flex-shrink: 0; }
+
+.searchInput {
+  width: 100%;
+  padding: 6px 10px;
+  font-size: 12.5px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  background: var(--input-bg);
+  color: var(--text);
+}
+
+.list { flex: 1; overflow-y: auto; }
+
+.item {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  width: 100%;
+  padding: 6px 10px;
+  font-size: 12px;
+  color: var(--text);
+  background: none;
+  border: none;
+  border-left: 3px solid transparent;
+  cursor: pointer;
+  text-align: left;
+  transition: background .1s;
+}
+
+.item:hover { background: var(--table-hover); }
+
+.itemActive {
+  background: var(--blue-lt);
+  border-left-color: var(--blue);
+  color: var(--blue);
+  font-weight: 600;
+}
+
+.itemName { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* Точка показывает состояние объекта: есть ли в нём замечания.
+   Цвет несёт смысл, поэтому у элемента есть и текстовая подпись
+   для программ чтения с экрана. */
+.dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
+.dotOk { background: var(--ok); }
+.dotWarn { background: var(--warn); }
+
+.count { font-size: 10.5px; color: var(--slate); }
+
+.panel { flex: 1; display: flex; flex-direction: column; overflow: hidden; min-width: 0; }
+
+/* ── Мобильный режим ──
+   Панель выезжает поверх содержимого: на узком экране места для двух
+   колонок нет, а прятать список объектов совсем нельзя — без него
+   не выбрать объект. */
+.overlay { display: none; }
+
+@media (max-width: 640px) {
+  .content { overflow: hidden; }
+
+  .sidebar {
+    position: absolute;
+    top: 0;
+    left: -215px;
+    height: 100%;
+    z-index: 50;
+    transition: left .25s ease;
+    box-shadow: none;
+  }
+
+  .sidebarOpen { left: 0; box-shadow: 4px 0 24px rgba(0, 0, 0, .22); }
+
+  .overlay {
+    display: block;
+    position: absolute;
+    inset: 0;
+    z-index: 40;
+    background: rgba(0, 0, 0, .35);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity .25s;
+    border: none;
+  }
+
+  .overlayVisible { opacity: 1; pointer-events: auto; }
+}
