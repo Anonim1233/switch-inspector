@@ -1,0 +1,89 @@
+/* Рамка стойки — толстая, чтобы схема читалась как физический шкаф. */
+.rack {
+  border: 3px solid var(--text);
+  border-radius: var(--r-md);
+  overflow: hidden;
+  background: var(--table-even);
+  box-shadow: 0 2px 8px var(--shadow);
+}
+
+.slot {
+  display: grid;
+  grid-template-columns: 34px 1fr auto;
+  gap: 10px;
+  align-items: center;
+  padding: 7px 10px;
+  border-bottom: 1px solid var(--border);
+  cursor: pointer;
+  transition: filter .12s;
+}
+
+.slot:last-child { border-bottom: none; }
+.slot:hover { filter: brightness(.96); }
+
+.unitNumber {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--text2);
+  text-align: right;
+}
+
+.name { font-size: 12.5px; font-weight: 500; overflow: hidden; text-overflow: ellipsis; }
+.comment { font-size: 11px; color: var(--text2); }
+
+/* ── Цвета по типу оборудования ──
+   Тип различается и цветом, и подписью: только цветом обозначать
+   нельзя — часть людей его не различает. */
+.switch { background: var(--blue); color: #fff; }
+.patch { background: var(--ok); color: #fff; }
+.optic { background: var(--orange); color: #fff; }
+.organizer { background: var(--blue-lt); color: var(--text); }
+.other { background: var(--card-bg); color: var(--text); }
+
+.reserve {
+  background: var(--card-bg);
+  color: var(--text2);
+  border-left: 4px solid var(--slate-lt);
+}
+
+/* Пустая позиция — штриховка: сразу видно, что место свободно. */
+.empty {
+  background: repeating-linear-gradient(
+    45deg,
+    transparent, transparent 6px,
+    var(--border) 6px, var(--border) 7px
+  );
+  color: var(--slate);
+}
+
+/* Несовпадение перекрывает цвет типа: расхождение с учётом важнее,
+   чем то, какое именно это оборудование. */
+.mismatch { background: var(--err) !important; color: #fff !important; }
+
+.badge {
+  font-size: 9.5px;
+  padding: 1px 6px;
+  border-radius: var(--r-pill);
+  background: rgba(255, 255, 255, .25);
+  white-space: nowrap;
+}
+
+.infoBtn {
+  background: none;
+  border: none;
+  color: inherit;
+  cursor: pointer;
+  font-size: 13px;
+  padding: 2px 5px;
+  opacity: .8;
+}
+
+.infoBtn:hover { opacity: 1; }
+
+@media (max-width: 640px) {
+  .slot { grid-template-columns: 30px 1fr auto; gap: 8px; padding: 7px 9px; }
+  /* Комментарий скрывается: на узком экране в приоритете сам юнит
+     и наименование, комментарии доступны в табличном режиме. */
+  .comment { display: none; }
+  .name { font-size: 12px; }
+}
