@@ -1,0 +1,102 @@
+.toolbar {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 8px 13px;
+  background: var(--card-bg);
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+  flex-wrap: wrap;
+}
+
+.title { font-size: 14px; font-weight: 600; color: var(--text); }
+.rowCount { font-size: 11.5px; color: var(--text2); }
+.spacer { flex: 1; }
+
+.search {
+  padding: 5px 10px;
+  font-size: 12.5px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  background: var(--input-bg);
+  color: var(--text);
+  min-width: 150px;
+}
+
+.button {
+  padding: 4px 10px;
+  font-size: 12px;
+  color: var(--text2);
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.button:hover { border-color: var(--blue); color: var(--blue); }
+.buttonActive { background: var(--blue-lt); border-color: var(--blue); color: var(--blue); }
+
+.wrap { flex: 1; overflow: auto; }
+
+.table { width: 100%; border-collapse: collapse; }
+
+.table th {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  padding: 7px 10px;
+  font-size: 10.5px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .05em;
+  color: var(--text2);
+  text-align: left;
+  white-space: nowrap;
+  background: var(--chrome-bg);
+  border-bottom: 1px solid var(--border);
+  cursor: pointer;
+  user-select: none;
+}
+
+.table th:hover { color: var(--blue); }
+
+.sortMark { margin-left: 4px; font-size: 9px; }
+
+.table td {
+  padding: 6px 10px;
+  font-size: 12.5px;
+  border-bottom: 1px solid var(--border);
+  white-space: nowrap;
+}
+
+.table tbody tr { cursor: pointer; }
+.table tbody tr:nth-child(even) { background: var(--table-even); }
+.table tbody tr:hover { background: var(--table-hover); }
+
+/* Строка с замечаниями помечена полосой слева: цветом внутри строки
+   помечать нельзя — она бы спорила с чередованием фона. */
+.rowIssue { border-left: 3px solid var(--err); }
+.rowDone { opacity: .55; }
+
+.issueText { color: var(--err); font-size: 11.5px; white-space: normal; }
+.mono { font-family: var(--mono); font-size: 12px; }
+.muted { color: var(--slate); }
+
+.checkCell { width: 34px; text-align: center; padding: 4px 6px; }
+
+.portOk { color: var(--ok); font-weight: 600; }
+.portWarn { color: var(--warn); font-weight: 600; }
+
+.empty { padding: 40px 20px; text-align: center; color: var(--text2); font-size: 13px; }
+
+/* На узком экране прячем второстепенные колонки, оставляя главное:
+   имя коммутатора, адрес и замечания. Скрытие делается через класс,
+   а не удалением из разметки, чтобы при повороте экрана колонки
+   возвращались без перерисовки таблицы. */
+@media (max-width: 640px) {
+  .toolbar { padding: 7px 10px; }
+  .title { font-size: 13px; }
+  .colSecondary { display: none; }
+  .table td, .table th { padding: 6px 8px; font-size: 12px; }
+}
