@@ -1,0 +1,15 @@
+.shell {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow: hidden;
+}
+
+/* Прокручивается только содержимое раздела: панель остаётся на месте,
+   иначе при длинных таблицах она уезжала бы за верхний край. */
+.content {
+  flex: 1;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}

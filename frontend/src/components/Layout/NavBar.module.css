@@ -1,0 +1,105 @@
+/* Верхняя панель. Значения перенесены из прежней версии без изменений. */
+
+.nav {
+  display: flex;
+  align-items: center;
+  height: 52px;
+  padding: 0 12px 0 18px;
+  gap: 10px;
+  background: var(--chrome-bg);
+  color: var(--text);
+  position: sticky;
+  top: 0;
+  z-index: 200;
+  flex-shrink: 0;
+}
+
+.tabs {
+  display: flex;
+  align-items: center;
+  overflow-x: auto;
+  /* Полосу прокрутки прячем: на узких экранах вкладки листаются
+     жестом, а полоса занимала бы место и мешала. */
+  scrollbar-width: none;
+}
+.tabs::-webkit-scrollbar { display: none; }
+
+.tab {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 52px;
+  padding: 0 16px;
+  font-family: var(--sans);
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--chrome-label);
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: color .15s, border-color .15s;
+}
+
+.tab:hover { color: var(--chrome-accent); }
+
+.tabActive {
+  color: var(--chrome-accent);
+  border-bottom-color: var(--chrome-accent);
+}
+
+.spacer { flex: 1; }
+
+.userChip {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 1;
+  min-width: 0;
+  padding: 4px 8px 4px 4px;
+  border-radius: var(--r-pill);
+  background: rgba(255, 255, 255, .08);
+  cursor: pointer;
+  border: none;
+  color: inherit;
+}
+
+.userName {
+  font-size: 13px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 160px;
+}
+
+.roleBadge {
+  font-size: 9px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .06em;
+  padding: 2px 7px;
+  border-radius: var(--r-pill);
+  background: var(--chrome-accent);
+  color: var(--chrome-bg);
+}
+
+.burger {
+  display: none;
+  background: none;
+  border: none;
+  color: var(--chrome-label);
+  cursor: pointer;
+  padding: 6px;
+}
+
+@media (max-width: 640px) {
+  .nav { height: 44px; padding: 0 8px; gap: 6px; }
+  .tab { height: 44px; padding: 0 10px; }
+  /* На узком экране подписи вкладок скрываются, остаются значки —
+     иначе шесть разделов не помещаются в строку. */
+  .tabLabel { display: none; }
+  .roleBadge { display: none; }
+  .userName { max-width: 90px; }
+  .burger { display: flex; }
+}
