@@ -1,0 +1,57 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: switch-inspector-frontend
+  labels:
+    app: switch-inspector
+    component: frontend
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: switch-inspector
+      component: frontend
+  template:
+    metadata:
+      labels:
+        app: switch-inspector
+        component: frontend
+    spec:
+      containers:
+        - name: frontend
+          image: switch-inspector/frontend:latest
+          ports:
+            - containerPort: 8080
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 8080
+            initialDelaySeconds: 3
+            periodSeconds: 10
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 200m
+              memory: 128Mi
+          securityContext:
+            # Работа без прав администратора — то же требование, что
+            # и у серверной части. Образ подобран соответствующий.
+            runAsNonRoot: true
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: false  # серверу отдачи нужны временные файлы
+            capabilities:
+              drop: ["ALL"]
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: switch-inspector-frontend
+spec:
+  selector:
+    app: switch-inspector
+    component: frontend
+  ports:
+    - port: 80
+      targetPort: 8080

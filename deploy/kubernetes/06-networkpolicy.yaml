@@ -1,0 +1,59 @@
+# ═══════════════════════════════════════════════════════════════════════
+# Ограничение сетевого взаимодействия
+#
+# Без этих правил база доступна любому приложению в кластере, а не только
+# этому. Закрывает замечание из разбора защищённости.
+#
+# ВНИМАНИЕ: работает только если в кластере установлен сетевой модуль
+# с поддержкой таких правил (Calico, Cilium и подобные). Если его нет,
+# правила будут приняты, но ни на что не повлияют — уточните у команды
+# инфраструктуры.
+# ═══════════════════════════════════════════════════════════════════════
+
+# ── База принимает соединения только от сервера приложения ──
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: switch-inspector-database
+spec:
+  podSelector:
+    matchLabels:
+      app: switch-inspector
+      component: database
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app: switch-inspector
+              component: backend
+      ports:
+        - protocol: TCP
+          port: 5432
+---
+# ── Сервер принимает обращения только от интерфейса и входного контроллера ──
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: switch-inspector-backend
+spec:
+  podSelector:
+    matchLabels:
+      app: switch-inspector
+      component: backend
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app: switch-inspector
+              component: frontend
+        # Входной контроллер обычно живёт в отдельном пространстве имён.
+        # Метку уточнить у команды инфраструктуры — в разных кластерах
+        # она называется по-разному.
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: ingress-nginx
+      ports:
+        - protocol: TCP
+          port: 3000

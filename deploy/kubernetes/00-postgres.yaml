@@ -1,0 +1,111 @@
+# ═══════════════════════════════════════════════════════════════════════
+# База данных
+#
+# ВАЖНО: этот манифест — для случая, когда база разворачивается в том же
+# кластере. Если в компании есть управляемая служба баз данных, используйте
+# её: она даёт резервное копирование, обновления и восстановление без
+# вашего участия. Тогда этот файл не применяется, а в настройках
+# указывается адрес внешней базы.
+# ═══════════════════════════════════════════════════════════════════════
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres
+  labels:
+    app: switch-inspector
+    component: database
+spec:
+  # Служба без собственного адреса: обращение идёт прямо к поду.
+  # Для базы это правильнее — соединение не должно перебрасываться
+  # между экземплярами.
+  clusterIP: None
+  selector:
+    app: switch-inspector
+    component: database
+  ports:
+    - port: 5432
+      targetPort: 5432
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: postgres
+  labels:
+    app: switch-inspector
+    component: database
+spec:
+  serviceName: postgres
+  # База в одном экземпляре: несколько копий требуют настройки
+  # репликации, которая выходит за рамки этого приложения.
+  replicas: 1
+  selector:
+    matchLabels:
+      app: switch-inspector
+      component: database
+  template:
+    metadata:
+      labels:
+        app: switch-inspector
+        component: database
+    spec:
+      securityContext:
+        # Образ базы работает от пользователя 999 — под ним же должны
+        # быть права на каталог с данными.
+        fsGroup: 999
+      containers:
+        - name: postgres
+          image: postgres:16-alpine
+          ports:
+            - containerPort: 5432
+          env:
+            - name: POSTGRES_DB
+              valueFrom:
+                configMapKeyRef:
+                  name: switch-inspector-config
+                  key: PGDATABASE
+            - name: POSTGRES_USER
+              valueFrom:
+                configMapKeyRef:
+                  name: switch-inspector-config
+                  key: PGUSER
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: switch-inspector-secrets
+                  key: PGPASSWORD
+            # Данные в подкаталоге: сам каталог тома содержит служебную
+            # запись lost+found, из-за которой база отказывается
+            # разворачиваться в нём напрямую.
+            - name: PGDATA
+              value: /var/lib/postgresql/data/pgdata
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/postgresql/data
+          readinessProbe:
+            exec:
+              command: ["pg_isready", "-U", "switch_inventory"]
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          livenessProbe:
+            exec:
+              command: ["pg_isready", "-U", "switch_inventory"]
+            initialDelaySeconds: 30
+            periodSeconds: 20
+          resources:
+            requests:
+              cpu: 200m
+              memory: 256Mi
+            limits:
+              cpu: "1"
+              memory: 1Gi
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        resources:
+          requests:
+            storage: 10Gi
+        # Класс хранилища зависит от кластера — уточнить у команды
+        # инфраструктуры. Без указания используется класс по умолчанию.
+        # storageClassName: ...

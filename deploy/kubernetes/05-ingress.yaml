@@ -1,0 +1,36 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: switch-inspector
+  annotations:
+    # Поток живых обновлений не должен буферизоваться и обрываться
+    # по таймауту: соединение держится открытым долго.
+    nginx.ingress.kubernetes.io/proxy-buffering: "off"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"
+spec:
+  ingressClassName: nginx
+  tls:
+    - hosts:
+        - switch-inspector.example.ru
+      secretName: switch-inspector-tls
+  rules:
+    - host: switch-inspector.example.ru
+      http:
+        paths:
+          # Запросы к API — на сервер
+          - path: /api
+            pathType: Prefix
+            backend:
+              service:
+                name: switch-inspector-backend
+                port:
+                  number: 3000
+          # Всё остальное — интерфейс
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: switch-inspector-frontend
+                port:
+                  number: 80

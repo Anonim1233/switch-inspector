@@ -1,0 +1,82 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: switch-inspector-backend
+  labels:
+    app: switch-inspector
+    component: backend
+spec:
+  # Несколько реплик: состояние сессий входа, счётчик попыток и
+  # рассылка изменений вынесены в базу, поэтому реплики
+  # взаимозаменяемы и не хранят ничего локально.
+  replicas: 2
+  selector:
+    matchLabels:
+      app: switch-inspector
+      component: backend
+  template:
+    metadata:
+      labels:
+        app: switch-inspector
+        component: backend
+    spec:
+      containers:
+        - name: backend
+          image: switch-inspector/backend:latest
+          ports:
+            - containerPort: 3000
+          envFrom:
+            - configMapRef:
+                name: switch-inspector-config
+            - secretRef:
+                name: switch-inspector-secrets
+
+          # Готовность: пока не отвечает, трафик не направляется
+          readinessProbe:
+            httpGet:
+              path: /api/health
+              port: 3000
+            initialDelaySeconds: 5
+            periodSeconds: 10
+
+          # Живость: перезапуск, если перестал отвечать совсем.
+          # Порог выше, чем у готовности — иначе временная нагрузка
+          # приводила бы к ненужным перезапускам.
+          livenessProbe:
+            httpGet:
+              path: /api/health
+              port: 3000
+            initialDelaySeconds: 20
+            periodSeconds: 20
+            failureThreshold: 3
+
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+
+          securityContext:
+            runAsNonRoot: true
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+
+      # Время на корректное завершение: приложение закрывает открытые
+      # соединения по сигналу, иначе пользователи получили бы обрыв.
+      terminationGracePeriodSeconds: 30
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: switch-inspector-backend
+spec:
+  selector:
+    app: switch-inspector
+    component: backend
+  ports:
+    - port: 3000
+      targetPort: 3000
