@@ -1,0 +1,176 @@
+.page { flex: 1; overflow-y: auto; background: var(--bg); }
+
+/* ── Верхние показатели ── */
+.top { padding: 20px 26px; background: var(--chrome-bg); color: var(--text); }
+
+.topLabel {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .1em;
+  color: var(--chrome-label);
+  margin-bottom: 12px;
+}
+
+.kpiRow {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 1px;
+  background: var(--border);
+  border-radius: var(--r-md);
+  overflow: hidden;
+}
+
+.kpi { padding: 14px 18px; background: var(--card-bg); }
+.kpiValue { font-size: 24px; font-weight: 700; line-height: 1.1; color: var(--text); }
+.kpiValue.warn { color: var(--warn); }
+.kpiValue.err { color: var(--err); }
+
+.kpiLabel {
+  margin-top: 4px;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .07em;
+  color: var(--text2);
+}
+
+/* ── Секции ── */
+.section { padding: 20px 26px; }
+
+.sectionHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 12px;
+  flex-wrap: wrap;
+}
+
+.sectionTitle { font-size: 15px; font-weight: 600; color: var(--text); }
+
+.hint { font-size: 11px; color: var(--slate); }
+
+/* ── Карточки категорий ── */
+.issueGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 10px;
+}
+
+.issueCard {
+  padding: 13px 14px;
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  cursor: pointer;
+  transition: border-color .15s, transform .15s;
+  text-align: left;
+}
+
+.issueCard:hover { border-color: var(--blue); transform: translateY(-1px); }
+
+/* Активная категория обведена — иначе непонятно, по чему отфильтрована
+   таблица ниже. Повторный клик снимает фильтр. */
+.issueCardActive { border-color: var(--blue); box-shadow: 0 0 0 1px var(--blue); }
+
+.icCount { font-size: 22px; font-weight: 700; line-height: 1.1; }
+.icName { margin-top: 3px; font-size: 11px; color: var(--text2); }
+
+.icBar {
+  margin-top: 8px;
+  height: 3px;
+  border-radius: var(--r-bar);
+  background: var(--border);
+  overflow: hidden;
+}
+
+.icFill { height: 100%; border-radius: var(--r-bar); }
+.icPct { margin-top: 4px; font-size: 10.5px; color: var(--slate); }
+
+/* ── Таблица проблемных записей ── */
+.tableTools { display: flex; align-items: center; gap: 8px; }
+
+.search {
+  padding: 6px 11px;
+  font-size: 12.5px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  background: var(--input-bg);
+  color: var(--text);
+  min-width: 160px;
+}
+
+.button {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 6px 12px;
+  font-size: 12px;
+  color: var(--text2);
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.button:hover { border-color: var(--blue); color: var(--blue); }
+
+.tableWrap {
+  max-height: 400px;
+  overflow: auto;
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+}
+
+.table { width: 100%; border-collapse: collapse; }
+
+.table th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  padding: 8px 12px;
+  font-size: 10.5px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .06em;
+  color: var(--text2);
+  text-align: left;
+  background: var(--chrome-bg);
+  border-bottom: 1px solid var(--border);
+}
+
+.table td {
+  padding: 7px 12px;
+  font-size: 12.5px;
+  border-bottom: 1px solid var(--border);
+}
+
+.table tbody tr { cursor: pointer; }
+.table tbody tr:nth-child(even) { background: var(--table-even); }
+.table tbody tr:hover { background: var(--table-hover); }
+
+.issueText { color: var(--err); font-size: 11.5px; }
+
+.count { font-size: 11.5px; color: var(--text2); }
+
+.empty { padding: 30px; text-align: center; color: var(--text2); font-size: 13px; }
+
+@media (max-width: 640px) {
+  .top, .section { padding: 14px; }
+  .kpiValue { font-size: 19px; }
+  .issueGrid { grid-template-columns: 1fr 1fr; }
+  .hint { display: none; }
+}
+
+/* Сообщение о результате загрузки файла */
+.importOk, .importError {
+  margin-bottom: 12px;
+  padding: 9px 12px;
+  font-size: 12.5px;
+  border-radius: var(--r-sm);
+}
+
+.importOk { color: var(--ok); background: var(--ok-bg); }
+.importError { color: var(--err); background: var(--err-bg); }
