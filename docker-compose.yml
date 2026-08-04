@@ -1,0 +1,56 @@
+# ═══════════════════════════════════════════════════════════════════════
+# Локальный запуск всего приложения: база, сервер, интерфейс.
+#
+#   cp .env.example .env   — заполнить JWT_SECRET и PGPASSWORD
+#   docker compose up -d
+#
+# Интерфейс будет доступен на http://localhost:8080
+# ═══════════════════════════════════════════════════════════════════════
+services:
+  database:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: ${PGDATABASE:-switch_inventory}
+      POSTGRES_USER: ${PGUSER:-switch_inventory}
+      POSTGRES_PASSWORD: ${PGPASSWORD:?нужно задать PGPASSWORD в .env}
+    volumes:
+      - db-data:/var/lib/postgresql/data
+      # Файлы схемы выполняются при первом создании базы, по порядку имён.
+      # Ограничения целостности сюда НЕ включены намеренно: их нужно
+      # добавлять после проверки данных, см. database/04-check-*.sql
+      - ./database/01-schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
+      - ./database/02-indexes.sql:/docker-entrypoint-initdb.d/02-indexes.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${PGUSER:-switch_inventory}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  backend:
+    build: ./backend
+    environment:
+      PORT: 3000
+      PGHOST: database
+      PGPORT: 5432
+      PGDATABASE: ${PGDATABASE:-switch_inventory}
+      PGUSER: ${PGUSER:-switch_inventory}
+      PGPASSWORD: ${PGPASSWORD}
+      JWT_SECRET: ${JWT_SECRET:?нужно задать JWT_SECRET в .env}
+      APP_URL: ${APP_URL:-http://localhost:8080}
+    depends_on:
+      database:
+        condition: service_healthy
+    restart: unless-stopped
+
+  frontend:
+    build: ./frontend
+    ports:
+      # Образ интерфейса работает без прав администратора и потому
+      # слушает 8080, а не привилегированный 80.
+      - "8080:8080"
+    depends_on:
+      - backend
+    restart: unless-stopped
+
+volumes:
+  db-data:
