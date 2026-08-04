@@ -1,0 +1,226 @@
+# ═══════════════════════════════════════════════════════════════════════
+# Конвейер сборки и доставки
+#
+# Этапы идут по возрастанию стоимости: сначала быстрые проверки, потом
+# тесты, потом сборка образов. Ошибка на раннем этапе не даёт запустить
+# дорогие — так конвейер завершается за секунды, а не за минуты.
+# ═══════════════════════════════════════════════════════════════════════
+
+stages:
+  - проверка
+  - тесты
+  - сборка
+  - безопасность
+  - развёртывание
+
+variables:
+  NODE_VERSION: "22"
+  # Кеш зависимостей внутри проекта — иначе не сохраняется между заданиями
+  npm_config_cache: "$CI_PROJECT_DIR/.npm"
+  DOCKER_TLS_CERTDIR: "/certs"
+
+default:
+  image: node:22-alpine
+  cache:
+    key:
+      files:
+        - frontend/package.json
+        - backend/package.json
+    paths:
+      - .npm/
+      - frontend/node_modules/
+      - backend/node_modules/
+
+# ── Шаблоны ────────────────────────────────────────────────────────────
+
+.setup_frontend: &setup_frontend
+  before_script:
+    - cd frontend
+    - npm ci --prefer-offline --no-audit
+
+.setup_backend: &setup_backend
+  before_script:
+    - cd backend
+    - npm ci --prefer-offline --no-audit
+
+# ═══════════════════ ПРОВЕРКА ═══════════════════
+
+проверка:интерфейс:
+  stage: проверка
+  <<: *setup_frontend
+  script:
+    - npm run lint
+    - npm run format:check
+    # Собственные проверки: разметка и имена классов оформления.
+    # Ловят то, что не видит обычный линтер: незакрытые теги
+    # и обращения к несуществующим классам.
+    - node check-jsx.cjs $(find src -name '*.jsx')
+    - node check-css.cjs
+
+проверка:сервер:
+  stage: проверка
+  <<: *setup_backend
+  script:
+    - npm run lint
+    - npm run format:check
+    - node --check server.js
+
+проверка:манифесты:
+  stage: проверка
+  image: alpine:latest
+  cache: {}
+  before_script:
+    - apk add --no-cache python3 py3-yaml
+  script:
+    # Ошибка в манифесте обнаруживается только при развёртывании,
+    # если не проверить заранее
+    - |
+      python3 -c "
+      import yaml, glob, sys
+      bad = 0
+      for f in sorted(glob.glob('deploy/kubernetes/*.yaml')) + ['docker-compose.yml']:
+          try:
+              list(yaml.safe_load_all(open(f, encoding='utf-8')))
+              print('OK  ' + f)
+          except Exception as e:
+              print('FAIL ' + f + ': ' + str(e)); bad += 1
+      sys.exit(bad)
+      "
+
+# ═══════════════════ ТЕСТЫ ═══════════════════
+
+тесты:интерфейс:
+  stage: тесты
+  <<: *setup_frontend
+  script:
+    - npm run test:coverage
+  coverage: '/All files\s*\|\s*([\d.]+)/'
+  artifacts:
+    when: always
+    reports:
+      coverage_report:
+        coverage_format: cobertura
+        path: frontend/coverage/cobertura-coverage.xml
+    expire_in: 1 week
+
+тесты:сервер:
+  stage: тесты
+  <<: *setup_backend
+  script:
+    - npm test
+  # Тесты сервера ещё не написаны — задание не должно останавливать
+  # конвейер, но и молча пропадать не должно.
+  allow_failure: true
+
+# ═══════════════════ СБОРКА ═══════════════════
+
+.build_image: &build_image
+  stage: сборка
+  image: docker:27
+  services:
+    - docker:27-dind
+  cache: {}
+  before_script:
+    - echo "$CI_REGISTRY_PASSWORD" | docker login -u "$CI_REGISTRY_USER" --password-stdin "$CI_REGISTRY"
+  rules:
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+    - if: $CI_COMMIT_TAG
+
+сборка:сервер:
+  <<: *build_image
+  script:
+    - docker build -t "$CI_REGISTRY_IMAGE/backend:$CI_COMMIT_SHORT_SHA" ./backend
+    - docker push "$CI_REGISTRY_IMAGE/backend:$CI_COMMIT_SHORT_SHA"
+    # Метка версии проставляется только для помеченных выпусков
+    - |
+      if [ -n "$CI_COMMIT_TAG" ]; then
+        docker tag "$CI_REGISTRY_IMAGE/backend:$CI_COMMIT_SHORT_SHA" "$CI_REGISTRY_IMAGE/backend:$CI_COMMIT_TAG"
+        docker push "$CI_REGISTRY_IMAGE/backend:$CI_COMMIT_TAG"
+      fi
+
+сборка:интерфейс:
+  <<: *build_image
+  script:
+    - docker build -t "$CI_REGISTRY_IMAGE/frontend:$CI_COMMIT_SHORT_SHA" ./frontend
+    - docker push "$CI_REGISTRY_IMAGE/frontend:$CI_COMMIT_SHORT_SHA"
+    - |
+      if [ -n "$CI_COMMIT_TAG" ]; then
+        docker tag "$CI_REGISTRY_IMAGE/frontend:$CI_COMMIT_SHORT_SHA" "$CI_REGISTRY_IMAGE/frontend:$CI_COMMIT_TAG"
+        docker push "$CI_REGISTRY_IMAGE/frontend:$CI_COMMIT_TAG"
+      fi
+
+# ═══════════════════ БЕЗОПАСНОСТЬ ═══════════════════
+
+безопасность:зависимости:
+  stage: безопасность
+  script:
+    - cd frontend && npm ci --prefer-offline --no-audit
+    # Проверяются только опасные уязвимости: предупреждения о мелких
+    # проблемах в средствах разработки останавливали бы конвейер
+    # без реальной пользы
+    - npm audit --audit-level=high --omit=dev
+    - cd ../backend && npm ci --prefer-offline --no-audit
+    - npm audit --audit-level=high --omit=dev
+  allow_failure: true
+
+безопасность:секреты:
+  stage: безопасность
+  image: alpine:latest
+  cache: {}
+  before_script:
+    - apk add --no-cache git grep
+  script:
+    # Попадание секрета в репозиторий — то, что дешевле поймать сразу,
+    # чем отзывать все ключи потом
+    - |
+      if git grep -nIE "(password|secret|token|api[_-]?key)\s*[:=]\s*['\"][A-Za-z0-9_/+-]{16,}" \
+           -- ':!*.md' ':!.gitlab-ci.yml' ':!*.example*' | grep -v 'process\.env'; then
+        echo ""
+        echo "Обнаружено похожее на секрет в коде."
+        echo "Секреты передаются переменными окружения — см. .env.example"
+        exit 1
+      fi
+      echo "Секретов в коде не обнаружено"
+    - |
+      if git ls-files | grep -E "^\.env$|\.pem$|\.key$|\.jwt-secret$"; then
+        echo "Файл с секретами не должен храниться в репозитории"
+        exit 1
+      fi
+      echo "Файлов с секретами не обнаружено"
+
+# ═══════════════════ РАЗВЁРТЫВАНИЕ ═══════════════════
+
+развёртывание:тестовое:
+  stage: развёртывание
+  image: bitnami/kubectl:latest
+  cache: {}
+  script:
+    - kubectl -n switch-inspector-test set image deployment/switch-inspector-backend
+        backend="$CI_REGISTRY_IMAGE/backend:$CI_COMMIT_SHORT_SHA"
+    - kubectl -n switch-inspector-test set image deployment/switch-inspector-frontend
+        frontend="$CI_REGISTRY_IMAGE/frontend:$CI_COMMIT_SHORT_SHA"
+    - kubectl -n switch-inspector-test rollout status deployment/switch-inspector-backend --timeout=5m
+  environment:
+    name: test
+    url: https://switch-inspector-test.example.ru
+  rules:
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+
+развёртывание:рабочее:
+  stage: развёртывание
+  image: bitnami/kubectl:latest
+  cache: {}
+  script:
+    - kubectl -n switch-inspector set image deployment/switch-inspector-backend
+        backend="$CI_REGISTRY_IMAGE/backend:$CI_COMMIT_TAG"
+    - kubectl -n switch-inspector set image deployment/switch-inspector-frontend
+        frontend="$CI_REGISTRY_IMAGE/frontend:$CI_COMMIT_TAG"
+    - kubectl -n switch-inspector rollout status deployment/switch-inspector-backend --timeout=5m
+  environment:
+    name: production
+    url: https://switch-inspector.example.ru
+  # Только по помеченному выпуску и только вручную: автоматическое
+  # обновление рабочей системы по каждому изменению недопустимо
+  rules:
+    - if: $CI_COMMIT_TAG
+      when: manual

@@ -1,0 +1,42 @@
+# Зависимости
+node_modules/
+.pnp
+.pnp.js
+
+# Сборка
+dist/
+build/
+*.tsbuildinfo
+
+# Секреты и локальные настройки
+.env
+.env.local
+.env.*.local
+.jwt-secret
+*.pem
+*.key
+
+# База и резервные копии — данные не хранятся в репозитории
+*.sqlite
+*.sqlite-journal
+*.dump
+backups/
+data.sqlite
+
+# Журналы
+*.log
+npm-debug.log*
+logs/
+
+# Служебное окружений разработчиков
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+*~
+
+# Временные файлы
+tmp/
+temp/
+.cache/
