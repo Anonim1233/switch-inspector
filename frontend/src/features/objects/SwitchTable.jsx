@@ -15,6 +15,7 @@ import { objectLabel } from '../../domain/issues';
 import { printObjectPassport } from '../print/printing';
 import { buildObjectTicket } from '../../domain/tickets';
 import TicketModal from '../tickets/TicketModal';
+import NetboxExport from './NetboxExport';
 import styles from './SwitchTable.module.css';
 
 /** Колонки в том же порядке, что и в прежней версии.
@@ -44,6 +45,7 @@ export default function SwitchTable({ mag, onOpenCard }) {
   const [hideDone, setHideDone] = useState(false);
   const [sort, setSort] = useState({ column: null, desc: false });
   const [ticket, setTicket] = useState(null);
+  const [netboxOpen, setNetboxOpen] = useState(false);
 
   const rows = useMemo(() => {
     let result = grouped[mag] ?? [];
@@ -119,6 +121,11 @@ export default function SwitchTable({ mag, onOpenCard }) {
         >
           Паспорт объекта
         </button>
+        {canEdit && (
+          <button className={styles.button} onClick={() => setNetboxOpen(true)}>
+            Отправить в NetBox
+          </button>
+        )}
         <button
           className={styles.button}
           onClick={() => {
@@ -199,6 +206,13 @@ export default function SwitchTable({ mag, onOpenCard }) {
       </div>
 
       {ticket && <TicketModal ticket={ticket} onClose={() => setTicket(null)} />}
+      {netboxOpen && (
+        <NetboxExport
+          mag={mag}
+          objectLabel={objectLabel(mag, prefixMap)}
+          onClose={() => setNetboxOpen(false)}
+        />
+      )}
     </>
   );
 }
