@@ -1,0 +1,33 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: switch-inspector-config
+data:
+  PORT: "3000"
+  PGHOST: "postgres"           # имя службы базы данных
+  PGPORT: "5432"
+  PGDATABASE: "switch_inventory"
+  PGUSER: "switch_inventory"
+  # Публичный адрес: от него зависят разрешённый источник запросов
+  # и адрес возврата при входе через внешнего провайдера
+  APP_URL: "https://switch-inspector.example.ru"
+  # Кому доверять заголовок с адресом клиента. В кластере обращение
+  # приходит от входного контроллера, а не с локального адреса, поэтому
+  # значение loopback здесь не подходит: без правильной настройки все
+  # клиенты выглядели бы как один адрес.
+  #
+  # Указать подсеть подов входного контроллера — уточнить у команды
+  # инфраструктуры. Значение ниже приведено как образец.
+  TRUSTED_PROXY: "10.0.0.0/8"
+
+  # ── Корпоративный вход ──
+  # Адрес области в Keycloak
+  OIDC_ISSUER: "https://keycloak.company.ru/realms/employees"
+  OIDC_CLIENT_ID: "switch-inspector"
+  # Роль при первом входе; выше назначается вручную
+  OIDC_DEFAULT_ROLE: "viewer"
+
+  # ── Обмен с NetBox ──
+  NETBOX_URL: "https://netbox.company.ru"
+  NETBOX_SWITCH_ROLES: "access_switch,core_switch,dc_switch,dc_core,dc_san_switch"
+  NETBOX_REQUEST_DELAY_MS: "150"
