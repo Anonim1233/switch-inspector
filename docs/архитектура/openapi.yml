@@ -1,0 +1,567 @@
+openapi: 3.0.3
+info:
+  title: Switch Inspector API
+  version: "1.0.0"
+  description: |
+    API системы инвентаризации сетевого оборудования розничной сети.
+
+    Спецификация восстановлена по исходному коду server.js.
+    Все эндпоинты, кроме /api/health и цепочки OAuth, требуют заголовок
+    Authorization: Bearer <token>.
+
+    Зона ответственности: помимо роли, пользователю могут быть назначены
+    конкретные дивизионы. Ограничение применяется на стороне сервера ко всем
+    спискам и операциям, включая отчёты.
+servers:
+  - url: https://{host}
+    variables:
+      host:
+        default: switch-inspector.example.ru
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  schemas:
+    Error:
+      type: object
+      properties:
+        error: { type: string, description: Текст ошибки на русском языке }
+    Switch:
+      type: object
+      description: Коммутатор. Наружу отдаётся с русскими ключами — так исторически ожидает фронтенд.
+      properties:
+        Mag:              { type: string, example: "134", description: "Объект без префикса" }
+        Коммутатор:       { type: string, example: "MAG134_70", description: "Полное имя с префиксом" }
+        Шкаф:             { type: string, example: "S7" }
+        IP Коммутатора:   { type: string, example: "10.51.134.11" }
+        UP:               { type: string }
+        DOWN:             { type: string }
+        Расположение:     { type: string }
+        SN Netbox:        { type: string }
+        SN Lyra:          { type: string }
+        Модель SW:        { type: string }
+        Комментарий:      { type: string }
+    SwitchInput:
+      type: object
+      required: [mag, sw]
+      properties:
+        mag:          { type: string }
+        sw:           { type: string }
+        shkaf:        { type: string }
+        ip:           { type: string }
+        up:           { type: string }
+        down:         { type: string }
+        location:     { type: string }
+        sn_netbox:    { type: string }
+        sn_lyra:      { type: string }
+        model:        { type: string }
+        comment:      { type: string }
+        comment_lyra: { type: string }
+    Cabinet:
+      type: object
+      properties:
+        id:             { type: integer }
+        mag:            { type: string }
+        name:           { type: string, example: "Шкаф коммутационный S1" }
+        characteristic: { type: string, example: "22u" }
+        location:       { type: string }
+        created_at:     { type: integer, format: int64 }
+    CabinetItem:
+      type: object
+      properties:
+        unit:          { type: integer }
+        name:          { type: string }
+        comment:       { type: string }
+        matchedSw:     { type: string, description: "Распознанный коммутатор, если позиция на него ссылается" }
+        switchExists:  { type: boolean }
+        shkafMismatch: { type: boolean, description: "Коммутатор числится в другом шкафу" }
+        actualShkaf:   { type: string }
+
+security:
+  - bearerAuth: []
+
+paths:
+  /api/health:
+    get:
+      summary: Проверка доступности
+      security: []
+      responses:
+        "200": { description: Сервис работает }
+
+  /api/login:
+    post:
+      summary: Вход по логину и паролю
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [username, password]
+              properties:
+                username: { type: string }
+                password: { type: string, format: password }
+      responses:
+        "200":
+          description: Вход выполнен либо требуется второй фактор
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - type: object
+                    properties:
+                      token:       { type: string }
+                      username:    { type: string }
+                      displayName: { type: string }
+                      role:        { type: string, enum: [viewer, admin, developer] }
+                  - type: object
+                    properties:
+                                                                  state:          { type: string }
+        "401": { description: Неверный логин или пароль, content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } } }
+        "429": { description: Превышено число попыток входа }
+
+  /api/me:
+    get:
+      summary: Данные текущего пользователя
+      responses:
+        "200": { description: Профиль }
+        "401": { description: Сессия истекла }
+
+  /api/me/password:
+    put:
+      summary: Смена пароля
+      responses:
+        "200": { description: Пароль изменён }
+        "401": { description: Текущий пароль неверен }
+
+  /api/me/avatar:
+    put:
+      summary: Загрузка аватара
+      description: Принимается base64. Формат проверяется по сигнатуре файла — JPEG, PNG, WEBP. SVG не принимается.
+      responses:
+        "200": { description: Аватар сохранён }
+        "400": { description: Недопустимый формат изображения }
+
+  /api/switches:
+    get:
+      summary: Список коммутаторов
+      description: Возвращается с учётом зоны ответственности пользователя.
+      responses:
+        "200":
+          description: Список
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: "#/components/schemas/Switch" } }
+    post:
+      summary: Добавление коммутатора
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/SwitchInput" } } }
+      responses:
+        "200": { description: Добавлен }
+        "403": { description: Нет прав либо объект вне зоны ответственности }
+
+  /api/switches/bulk:
+    post:
+      summary: Массовый импорт или обновление
+      description: Выполняется одной транзакцией. Ключ — пара объект и имя коммутатора.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                rows: { type: array, items: { $ref: "#/components/schemas/SwitchInput" } }
+      responses:
+        "200":
+          description: Результат импорта
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  imported:           { type: integer }
+                  skippedOutOfScope:  { type: integer }
+        "500": { description: Ошибка импорта, изменения отменены }
+
+  /api/switches/{mag}/{sw}:
+    delete:
+      summary: Удаление коммутатора
+      parameters:
+        - { name: mag, in: path, required: true, schema: { type: string } }
+        - { name: sw,  in: path, required: true, schema: { type: string } }
+      responses:
+        "200": { description: Удалён }
+        "403": { description: Объект вне зоны ответственности }
+
+  /api/switches/{mag}/{sw}/location:
+    get:
+      summary: Физическое размещение коммутатора
+      parameters:
+        - { name: mag, in: path, required: true, schema: { type: string } }
+        - { name: sw,  in: path, required: true, schema: { type: string } }
+      responses:
+        "200":
+          description: Найдено либо нет
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  found:       { type: boolean }
+                  cabinetId:   { type: integer }
+                  cabinetName: { type: string }
+                  unit:        { type: integer }
+
+  /api/cabinets:
+    get:
+      summary: Шкафы объекта
+      parameters:
+        - { name: mag, in: query, required: true, schema: { type: string } }
+      responses:
+        "200":
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: "#/components/schemas/Cabinet" } }
+        "400": { description: Не указан объект }
+        "403": { description: Объект вне зоны ответственности }
+    post:
+      summary: Создание шкафа
+      responses:
+        "200": { content: { application/json: { schema: { $ref: "#/components/schemas/Cabinet" } } }, description: Создан }
+
+  /api/cabinets/{id}:
+    put:
+      summary: Изменение шапки шкафа
+      parameters: [{ name: id, in: path, required: true, schema: { type: integer } }]
+      responses:
+        "200": { description: Изменён }
+        "404": { description: Шкаф не найден }
+    delete:
+      summary: Удаление шкафа вместе с содержимым
+      parameters: [{ name: id, in: path, required: true, schema: { type: integer } }]
+      responses:
+        "200": { description: Удалён }
+
+  /api/cabinets/{id}/items:
+    get:
+      summary: Содержимое шкафа
+      parameters: [{ name: id, in: path, required: true, schema: { type: integer } }]
+      responses:
+        "200":
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: "#/components/schemas/CabinetItem" } }
+    put:
+      summary: Полная замена содержимого
+      description: Все позиции удаляются и записываются заново, одной транзакцией.
+      parameters: [{ name: id, in: path, required: true, schema: { type: integer } }]
+      responses:
+        "200": { description: Сохранено }
+        "500": { description: Не удалось сохранить }
+
+  /api/cabinets/import:
+    post:
+      summary: Массовый импорт шкафов
+      description: Шкаф ищется по паре объект и наименование. Существующий обновляется, новый создаётся.
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  created: { type: integer }
+                  updated: { type: integer }
+
+  /api/cabinets/search:
+    get:
+      summary: Поиск по содержимому всех шкафов
+      parameters:
+        - { name: q, in: query, required: true, schema: { type: string, minLength: 2 } }
+      responses:
+        "200": { description: Найденные позиции, не более 30 }
+
+  /api/cabinets/undocumented:
+    get:
+      summary: Коммутаторы объекта, не размещённые ни в одном шкафу
+      parameters:
+        - { name: mag, in: query, required: true, schema: { type: string } }
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  mag:          { type: string }
+                  total:        { type: integer }
+                  undocumented: { type: array, items: { type: string } }
+
+  /api/notes:
+    get:
+      summary: Заметки
+      responses: { "200": { description: Список } }
+    post:
+      summary: Сохранение или удаление заметки
+      responses: { "200": { description: Сохранено } }
+
+  /api/statuses:
+    get:
+      summary: Отметки «обработано»
+      responses: { "200": { description: Список } }
+    post:
+      summary: Установка отметки
+      responses: { "200": { description: Сохранено } }
+
+  /api/divisions:
+    get:
+      summary: Дивизионы и их состав
+      responses: { "200": { description: Справочник } }
+    post:
+      summary: Создание дивизиона
+      responses:
+        "200": { description: Создан }
+        "403": { description: Требуется роль developer }
+
+  /api/users:
+    get:
+      summary: Список учётных записей
+      description: Только для роли developer. Пароли и идентификатор Яндекса наружу не отдаются.
+      responses:
+        "200": { description: Список }
+        "403": { description: Требуется роль developer }
+    post:
+      summary: Создание учётной записи
+      responses: { "200": { description: Создана } }
+
+
+
+
+
+
+  /api/events:
+    get:
+      summary: Поток живых обновлений
+      description: |
+        Server-Sent Events. Токен передаётся query-параметром, так как
+        браузерный EventSource не умеет отправлять заголовки.
+        Рассылка между репликами идёт через механизм уведомлений PostgreSQL.
+      security: []
+      parameters:
+        - { name: token, in: query, required: true, schema: { type: string } }
+      responses:
+        "200": { description: Поток событий, content: { text/event-stream: {} } }
+
+  /api/reports/management.pdf:
+    get:
+      summary: PDF-отчёт для руководства
+      description: Только для роли developer. Учитывает зону ответственности.
+      responses:
+        "200": { description: Документ, content: { application/pdf: {} } }
+        "403": { description: Требуется роль developer }
+        "500": { description: Не удалось сформировать отчёт }
+
+  /api/backup-status:
+    get:
+      summary: Состояние резервного копирования
+      description: Только для роли developer. В кластере копирование выполняется средствами инфраструктуры.
+      responses:
+        "200": { description: Состояние }
+
+  /api/auth/oidc/start:
+    get:
+      summary: Начало входа через корпоративного поставщика
+      description: |
+        Создаёт разовое состояние и возвращает адрес поставщика.
+        Пользователь на этом этапе неизвестен — его сообщит поставщик
+        при возврате.
+      security: []
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  authUrl: { type: string }
+                  state:   { type: string }
+        "503": { description: Корпоративный вход не настроен на сервере }
+
+  /api/auth/oidc/callback:
+    get:
+      summary: Возврат от поставщика учётных записей
+      description: |
+        Обменивает код на сведения о пользователе. Связь с учётной
+        записью строится по постоянному идентификатору, а не по логину:
+        логин может измениться, идентификатор — нет.
+
+        При первом входе запись заводится автоматически с правом только
+        просмотра.
+      security: []
+      parameters:
+        - { name: code,  in: query, schema: { type: string } }
+        - { name: state, in: query, schema: { type: string } }
+      responses:
+        "302": { description: Перенаправление в приложение с токеном в адресе }
+
+  /api/auth/oidc/status:
+    get:
+      summary: Опрос результата входа
+      security: []
+      parameters:
+        - { name: state, in: query, required: true, schema: { type: string } }
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status: { type: string, enum: [pending, done, error, expired] }
+
+  /api/netbox/devices:
+    get:
+      summary: Выгрузка оборудования из NetBox
+      description: |
+        Обмен односторонний — только чтение. Отбираются устройства
+        в состоянии active и только с ролями коммутаторов; отбор
+        выполняется на стороне NetBox в самом запросе.
+
+        Загрузка файлом сохранена как запасной путь на случай
+        недоступности NetBox.
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  count:     { type: integer }
+                  status:    { type: string, example: active }
+                  fetchedAt: { type: integer, format: int64 }
+                  rows:      { type: array, items: { type: object } }
+        "502": { description: Не удалось получить данные из NetBox }
+        "503": { description: Обмен с NetBox не настроен на сервере }
+
+  /api/audit:
+    get:
+      summary: Журнал действий
+      description: |
+        Только для роли developer без ограничения по зоне
+        ответственности. Записи содержат сведения о действиях всех
+        пользователей.
+      parameters:
+        - { name: username, in: query, schema: { type: string }, description: Отбор по пользователю }
+        - { name: action,   in: query, schema: { type: string }, description: Отбор по типу события }
+        - { name: from,     in: query, schema: { type: integer, format: int64 } }
+        - { name: to,       in: query, schema: { type: integer, format: int64 } }
+        - { name: search,   in: query, schema: { type: string }, description: Поиск по объекту и подробностям }
+        - { name: limit,    in: query, schema: { type: integer, default: 100, maximum: 1000 } }
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  rows:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        ts:       { type: integer, format: int64 }
+                        username: { type: string }
+                        action:   { type: string, description: "login_corporate | login_local | login_failed | user_role_change | switch_update | …" }
+                        target:   { type: string }
+                        details:  { type: string, description: Изменённые поля в виде структуры }
+                        ip:       { type: string }
+                  total: { type: integer }
+                  limit: { type: integer }
+        "403": { description: Требуется роль developer без ограничения зоны }
+
+  /api/audit/filters:
+    get:
+      summary: Значения для отбора в журнале
+      description: Перечень встречающихся типов событий и пользователей.
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  actions: { type: array, items: { type: string } }
+                  users:   { type: array, items: { type: string } }
+
+  /api/audit/export:
+    get:
+      summary: Выгрузка журнала в файл
+      description: |
+        Применяется тот же отбор, что и при просмотре. Формат CSV
+        с меткой порядка байтов — иначе кириллица в электронных
+        таблицах отображается неразборчиво.
+
+        Значения, начинающиеся со знака равенства или плюса,
+        экранируются: иначе электронные таблицы воспримут их как
+        формулы и выполнят.
+      parameters:
+        - { name: username, in: query, schema: { type: string } }
+        - { name: action,   in: query, schema: { type: string } }
+        - { name: from,     in: query, schema: { type: integer, format: int64 } }
+        - { name: to,       in: query, schema: { type: integer, format: int64 } }
+      responses:
+        "200": { description: Файл, content: { text/csv: {} } }
+        "403": { description: Требуется роль developer }
+
+  /api/users/{username}/divisions:
+    put:
+      summary: Зона ответственности пользователя
+      description: |
+        Пустой список означает доступ ко всем объектам.
+        Изменить собственную зону нельзя — это позволяло бы снять
+        ограничение в обход того, кто его назначил.
+      parameters:
+        - { name: username, in: path, required: true, schema: { type: string } }
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                divisions: { type: array, items: { type: string } }
+      responses:
+        "200": { description: Обновлено }
+        "400": { description: Попытка изменить собственную зону }
+        "403": { description: Требуется developer без ограничения зоны }
+
+  /api/divisions/{name}:
+    delete:
+      summary: Удаление дивизиона
+      parameters:
+        - { name: name, in: path, required: true, schema: { type: string } }
+      responses:
+        "200": { description: Удалён }
+        "403": { description: Требуется developer без ограничения зоны }
+
+  /api/divisions/{name}/mags:
+    post:
+      summary: Добавление объекта в дивизион
+      parameters:
+        - { name: name, in: path, required: true, schema: { type: string } }
+      responses:
+        "200": { description: Добавлен }
+
+  /api/divisions/{name}/mags/{mag}:
+    delete:
+      summary: Исключение объекта из дивизиона
+      parameters:
+        - { name: name, in: path, required: true, schema: { type: string } }
+        - { name: mag,  in: path, required: true, schema: { type: string } }
+      responses:
+        "200": { description: Исключён }
