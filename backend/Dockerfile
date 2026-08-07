@@ -14,7 +14,7 @@ WORKDIR /app
 # Зависимости отдельным слоем: пересобираются только при изменении
 # package.json, а не при каждой правке кода.
 COPY package*.json ./
-RUN npm ci --omit=dev
+RUN npm install --omit=dev --no-audit --no-fund
 
 COPY . .
 
