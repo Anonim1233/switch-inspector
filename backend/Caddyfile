@@ -1,0 +1,54 @@
+# ═══════════════════════════════════════════════════════════════════════
+# Обратный прокси с защищённым соединением.
+#
+# Caddy получает и продлевает сертификат сам — вручную ничего делать
+# не нужно. Требуется лишь, чтобы домен указывал на этот сервер,
+# а порты 80 и 443 были доступны снаружи: по 80 проходит проверка
+# владения доменом.
+# ═══════════════════════════════════════════════════════════════════════
+
+{$SITE_ADDRESS} {
+    # Адрес задаётся переменной SITE_ADDRESS в файле .env.
+    # Для проверки без домена подойдёт :80 — тогда соединение
+    # будет незащищённым, и пароли пойдут открытым текстом.
+
+    encode gzip
+
+    # Запросы к API — на сервер приложения
+    handle /api/* {
+        reverse_proxy backend:3000 {
+            header_up X-Real-IP {remote_host}
+            header_up X-Forwarded-For {remote_host}
+            header_up X-Forwarded-Proto {scheme}
+
+            # Поток живых обновлений держится открытым долго и не должен
+            # накапливаться в буфере: иначе события не доходят вовсе.
+            flush_interval -1
+            transport http {
+                read_timeout 3600s
+            }
+        }
+    }
+
+    # Всё остальное — интерфейс
+    handle {
+        reverse_proxy frontend:8080
+    }
+
+    # Заголовки безопасности. Приложение выставляет свои, но здесь
+    # они применяются и к статике, которую отдаёт не оно.
+    header {
+        Strict-Transport-Security "max-age=31536000; includeSubDomains"
+        X-Content-Type-Options "nosniff"
+        X-Frame-Options "DENY"
+        Referrer-Policy "strict-origin-when-cross-origin"
+        -Server
+    }
+
+    log {
+        output file /var/log/caddy/access.log {
+            roll_size 10mb
+            roll_keep 5
+        }
+    }
+}
